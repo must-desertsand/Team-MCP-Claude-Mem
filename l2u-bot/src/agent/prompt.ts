@@ -8,6 +8,8 @@ export interface PromptContext {
   readonly threadTs: string;
   readonly requester: string;
   readonly nowKst: string;
+  /** Whether the Team-Mem shared-memory tools are wired in for this run. */
+  readonly teamMemAvailable?: boolean;
 }
 
 /**
@@ -64,7 +66,18 @@ means you never reach a conclusion.
 4. Do not re-run the same pattern with cosmetic variations. Decide the next step from
    results you already have.
 
-## Permission constraints
+${
+  ctx.teamMemAvailable
+    ? `## Team memory
+team_status and team_search query Team-Mem — the shared memory recording what every
+teammate's AI coding agent is working on (live activity, decisions, code changes, bugs,
+session summaries). For questions about what a teammate is doing or has done, check
+team_status/team_search FIRST — it is faster and more current than grepping the repo.
+Cite hits by their id (e.g. o12) and author.
+
+`
+    : ''
+}## Permission constraints
 You are **read-only**. There are no tools to create or edit GitHub issues, post comments,
 or change code. If asked to do such a thing, say you cannot, and instead provide a draft
 of the content as text.

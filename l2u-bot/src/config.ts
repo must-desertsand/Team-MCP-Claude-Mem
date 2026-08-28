@@ -39,6 +39,11 @@ export interface Config {
     /** Absolute path to the local clone used for code search. */
     readonly clonePath: string;
   };
+  /** Team-Mem shared-memory server. Null when no bot token is configured — tools are omitted. */
+  readonly teamMem: {
+    readonly baseUrl: string;
+    readonly token: string;
+  } | null;
   readonly limits: Limits;
   readonly auditDir: string;
   /** Days to keep audit logs. 0 disables pruning. */
@@ -127,6 +132,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       repo: optional('GITHUB_REPO', 'mustfintech/l2u-sandbox'),
     }),
     repo: Object.freeze({ clonePath }),
+    // Deliberately TEAM_MEM_BOT_TOKEN, not TEAM_MEM_TOKEN: a teammate's personal
+    // plugin token exported in the shell would otherwise override the bot's
+    // service token (dotenv never overrides existing process env).
+    teamMem:
+      env.TEAM_MEM_BOT_TOKEN && env.TEAM_MEM_BOT_TOKEN.trim() !== ''
+        ? Object.freeze({
+            baseUrl: optional('TEAM_MEM_URL', 'http://127.0.0.1:7337'),
+            token: env.TEAM_MEM_BOT_TOKEN.trim(),
+          })
+        : null,
     limits: Object.freeze({
       maxTurns: Number(optional('MAX_TURNS', '20')),
       toolResultBytes: Number(optional('TOOL_RESULT_BYTES', '20000')),

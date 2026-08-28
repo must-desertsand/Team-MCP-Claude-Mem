@@ -1,6 +1,7 @@
 import type { SlackCollector } from '../slack/collector.js';
 import type { GithubReader } from '../github/reader.js';
 import type { RepoReader } from '../repo/search.js';
+import type { TeamMemClient } from '../teammem/client.js';
 import { renderTranscript } from '../slack/normalize.js';
 import type { ToolDefinition, ToolResult } from '../types.js';
 import { truncate } from './truncate.js';
@@ -17,7 +18,12 @@ export interface RepoToolDeps {
   readonly maxResultBytes: number;
 }
 
-export type ToolDeps = SlackToolDeps & RepoToolDeps;
+export interface TeamMemToolDeps {
+  readonly teamMem: TeamMemClient;
+  readonly maxResultBytes: number;
+}
+
+export type ToolDeps = SlackToolDeps & RepoToolDeps & { readonly teamMem?: TeamMemClient | null };
 
 function str(args: Record<string, unknown>, key: string, fallback?: string): string {
   const v = args[key];
@@ -235,10 +241,66 @@ export function buildRepoTools(deps: RepoToolDeps): readonly ToolDefinition[] {
   ]);
 }
 
+/** Team-Mem lookup tools (shared Claude Code memory). Read-only by construction:
+ *  the bot holds a service-role token that the server refuses writes for. */
+export function buildTeamMemTools(deps: TeamMemToolDeps): readonly ToolDefinition[] {
+  const { teamMem, maxResultBytes } = deps;
+  const w = (fn: (a: Record<string, unknown>) => Promise<string>) => wrap(maxResultBytes, fn);
+
+  return Object.freeze([
+    {
+      name: 'team_status',
+      description:
+        "Who on the team's AI coding agents has been doing what lately: live sessions and recent session summaries from Team-Mem, the shared Claude Code memory. Start here for questions like 'what is Haseeb working on?'.",
+      parameters: {
+        type: 'object',
+        properties: {
+          workspace: { type: 'string', description: "Workspace filter, e.g. 'l2u'. Defaults to all." },
+          days: { type: 'number', description: 'Look-back window in days (default 3, max 30)' },
+        },
+        required: [],
+      },
+      run: w(async (a) =>
+        teamMem.status(a['workspace'] as string | undefined, a['days'] as number | undefined),
+      ),
+    },
+    {
+      name: 'team_search',
+      description:
+        "Full-text search the team's shared AI work memory: decisions, code changes, discoveries, bugs, and per-session summaries recorded from every teammate's Claude Code sessions. Use for 'did anyone touch X / decide Y' questions.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search keywords' },
+          workspace: { type: 'string', description: "Workspace filter, e.g. 'l2u'" },
+          user: { type: 'string', description: 'Filter to one teammate by name' },
+          type: {
+            type: 'string',
+            enum: ['decision', 'change', 'discovery', 'bug', 'how-it-works', 'summary'],
+          },
+          limit: { type: 'number', description: 'Max hits (default 10, max 50)' },
+        },
+        required: ['query'],
+      },
+      run: w(async (a) =>
+        teamMem.search(str(a, 'query'), {
+          workspace: a['workspace'] as string | undefined,
+          user: a['user'] as string | undefined,
+          type: a['type'] as string | undefined,
+          limit: a['limit'] as number | undefined,
+        }),
+      ),
+    },
+  ]);
+}
+
 /**
  * The Phase 1 tool catalog. Every entry is read-only.
  * Adding a write tool here is a design change and requires an approval gate first.
  */
 export function buildTools(deps: ToolDeps): readonly ToolDefinition[] {
-  return Object.freeze([...buildSlackTools(deps), ...buildRepoTools(deps)]);
+  const teamMemTools = deps.teamMem
+    ? buildTeamMemTools({ teamMem: deps.teamMem, maxResultBytes: deps.maxResultBytes })
+    : [];
+  return Object.freeze([...buildSlackTools(deps), ...buildRepoTools(deps), ...teamMemTools]);
 }

@@ -7,6 +7,7 @@ import { GithubReader } from './github/reader.js';
 import { RepoReader } from './repo/search.js';
 import { AgentLoop } from './agent/loop.js';
 import { buildTools } from './agent/tools.js';
+import { TeamMemClient } from './teammem/client.js';
 import { buildSystemPrompt } from './agent/prompt.js';
 import { renderTranscript, toKstIso } from './slack/normalize.js';
 import { AuditLog } from './audit/log.js';
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
   const github = new GithubReader(config.github.repo);
   const repo = new RepoReader(config.repo.clonePath);
   const audit = new AuditLog(config.auditDir, config.auditRetentionDays);
+  const teamMem = config.teamMem ? new TeamMemClient(config.teamMem.baseUrl, config.teamMem.token) : null;
 
   const pruned = audit.prune();
   if (pruned.length > 0) log(`Pruned ${pruned.length} audit log(s) past retention`);
@@ -72,6 +74,7 @@ async function main(): Promise<void> {
         slack: collector,
         github,
         repo,
+        teamMem,
         defaultChannel: job.channel,
         maxResultBytes: config.limits.toolResultBytes,
       });
@@ -106,6 +109,7 @@ async function main(): Promise<void> {
         threadTs: job.threadTs,
         requester: job.userId,
         nowKst: toKstIso(String(Date.now() / 1000)),
+        teamMemAvailable: teamMem !== null,
       });
 
       const userPrompt = [
@@ -135,6 +139,7 @@ async function main(): Promise<void> {
 
   await gateway.start();
   log(`l2u-bot started. repo=${config.github.repo} clone=${config.repo.clonePath}`);
+  log(config.teamMem ? `Team-Mem tools enabled (${config.teamMem.baseUrl})` : 'Team-Mem tools disabled (no TEAM_MEM_BOT_TOKEN)');
   log(`Model chain: ${config.models.chain.map((m) => m.id).join(' -> ')}`);
   log(
     config.slack.allowedChannels.length > 0

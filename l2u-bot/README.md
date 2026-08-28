@@ -181,3 +181,18 @@ Korean. Technical terms and code identifiers stay in their original form either 
 - External commands run with argument arrays only. No shell is involved, so command
   injection does not apply.
 - The target repository is fixed in configuration and the model cannot change it.
+
+## Team-Mem tools (added in this fork)
+
+When `TEAM_MEM_BOT_TOKEN` is set in `.env`, the agent gains two read-only tools
+backed by [Team-Mem](https://github.com/must-desertsand/Team-MCP-Claude-Mem)
+(the team's shared Claude Code memory, expected on the same machine at
+`http://127.0.0.1:7337`):
+
+- `team_status` — who is working on what right now + recent session summaries
+- `team_search` — full-text search over every teammate's recorded decisions,
+  changes, bugs, and session summaries
+
+The token is a `service`-role Team-Mem token (query-only; the server refuses
+writes and deletes for it). Without the token, the bot behaves exactly as
+before — the tools and their prompt section are omitted entirely.
