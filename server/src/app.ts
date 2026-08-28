@@ -51,11 +51,17 @@ export function buildApp(db: Database, cfg: Config): Hono<AppEnv> {
 
   registerRestRoutes(app, db);
 
-  const mcpTransport = new StreamableHTTPTransport();
-  const mcpServer = buildMcpServer(db);
-  const mcpReady = mcpServer.connect(mcpTransport);
+  // Stateless per-request MCP wiring: a single shared transport/server would
+  // collide sessions across concurrent teammates (both @hono/mcp's and the
+  // underlying SDK's transport hold one sessionId slot per instance). With
+  // sessionIdGenerator left undefined, no mcp-session-id is issued and each
+  // request is fully self-contained, so a fresh transport+server pair per
+  // request is required (and is cheap: buildMcpServer's tools are pure,
+  // stateless db reads).
   app.all("/mcp", async (c) => {
-    await mcpReady;
+    const mcpTransport = new StreamableHTTPTransport({ sessionIdGenerator: undefined });
+    const mcpServer = buildMcpServer(db);
+    await mcpServer.connect(mcpTransport);
     return mcpTransport.handleRequest(c);
   });
 
