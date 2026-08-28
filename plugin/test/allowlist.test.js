@@ -11,6 +11,7 @@ describe("normalizeRemote", () => {
     expect(normalizeRemote("https://github.com/mustfintech/web")).toBe("mustfintech/web");
     expect(normalizeRemote("ssh://git@github.com/a/b.git")).toBe("a/b");
     expect(normalizeRemote("github.com-company:must-desertsand/Team-MCP-Claude-Mem.git")).toBe("must-desertsand/team-mcp-claude-mem");
+    expect(normalizeRemote("git@github.com:mustfintech/WEB.GIT")).toBe("mustfintech/web");
     expect(normalizeRemote("not a url")).toBeNull();
     expect(normalizeRemote("")).toBeNull();
     expect(normalizeRemote(null)).toBeNull();

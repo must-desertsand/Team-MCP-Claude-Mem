@@ -30,9 +30,9 @@ describe("OpenAiCompatProvider", () => {
     expect(captured!.auth).toBe("Bearer sk-x");
   });
   test("throws on HTTP error and on missing content", async () => {
-    const p500 = new OpenAiCompatProvider("http://x", "", "m", (async () => new Response("no", { status: 500 })) as typeof fetch);
+    const p500 = new OpenAiCompatProvider("http://x", "", "m", (async () => new Response("no", { status: 500 })) as unknown as typeof fetch);
     expect(p500.complete("s", "u")).rejects.toThrow("LLM 500");
-    const pEmpty = new OpenAiCompatProvider("http://x", "", "m", (async () => new Response(JSON.stringify({ choices: [] }), { status: 200 })) as typeof fetch);
+    const pEmpty = new OpenAiCompatProvider("http://x", "", "m", (async () => new Response(JSON.stringify({ choices: [] }), { status: 200 })) as unknown as typeof fetch);
     expect(pEmpty.complete("s", "u")).rejects.toThrow();
   });
   test("omits auth header when apiKey empty", async () => {

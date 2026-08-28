@@ -315,3 +315,43 @@ delete, and it calls `localhost:7337` on the same machine.
 | E3 | Node ≥ 18 on all teammate machines | each teammate | assumed true (JS team) |
 | E4 | Confirm repo list for workspace `l2u` | team | fallback rule: any `mustfintech/*` repo = its own workspace |
 | D1 | If glm-5.2 extraction quality is poor | team | swap `LLM_*` config to a hosted model (Anthropic OpenAI-compat endpoint); no code change |
+
+## 16. As-built notes (v1)
+
+Points where the shipped implementation resolved an ambiguity in, or diverged
+in a small documented way from, the design above:
+
+- **Session end rides the `SessionEnd` hook, not `Stop`.** `Stop` fires at the
+  end of every assistant turn, not at the end of a session, so wiring `{kind:
+  "end"}` to it would have closed sessions mid-conversation. The plugin sends
+  the end event from `SessionEnd` instead (§6's table should be read with
+  `SessionEnd` in place of `Stop`). The 30-minute abandoned-session sweep
+  (§8, §11) remains the fallback for sessions that never cleanly fire a
+  session-end hook (crash, force-quit, `claude` killed).
+- **Non-end activity reopens a session.** If an event with `kind !== "end"`
+  arrives for a session whose `ended_at` is already set, the server treats
+  the session as resumed: `ended_at` is cleared back to `NULL` (rather than
+  preserved) and, if a summary already existed for that session, it is
+  deleted so it doesn't linger as stale/incomplete. The worker regenerates
+  the summary from *all* the session's observations — old and new — the next
+  time the session genuinely ends.
+- **Spool is one-file-per-event**, not the single `spool.jsonl` sketched in
+  §6: each event is its own `evt-<ts>-<pid>-<rand>.json` file under
+  `~/.team-mem/spool/`. A sender claims files by atomic rename to
+  `.claim-<pid>` rather than renaming one aggregate file; a claim older than
+  10 minutes (crashed/killed sender) is recovered back into the pool by the
+  next claimer. A claiming pass stops once the accumulated batch would
+  exceed a 200 KB byte budget, leaving the remainder for the next flush
+  rather than building a batch the server would reject.
+- **Ingest batch body cap is 256 KB**, not the 64 KB figure in §7 — §7 is
+  superseded by this on that one number; the per-event (8 KB) and per-field
+  caps in §7 are unchanged and still enforced client-side.
+- **Admin capability is an admin-role user token**, not a separate
+  `ADMIN_TOKEN` env var: `bun run admin user add <name> --role admin` issues
+  a normal per-user bearer token whose role is `admin`, and the auth
+  middleware's existing role check (§10) covers it. There is no
+  `ADMIN_TOKEN` in `server/src/config.ts`.
+- **§12's "e2e against real glm-5.2" is realized as the deploy-day smoke
+  checklist** kept in the implementation plan (not a script that ships in
+  `server/test/`) — run once, by hand, against the real endpoint immediately
+  after deployment, rather than as part of the automated suite.

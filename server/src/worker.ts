@@ -29,9 +29,17 @@ export async function runCompressionPass(db: Database, provider: LlmProvider, no
     const ids = events.map(e => e.id);
     const marks = ids.map(() => "?").join(",");
     const { system, user } = extractionPrompt(events);
-    let raw: string | null = null;
-    try { raw = await provider.complete(system, user); } catch { raw = null; }
-    const parsed = obsDraftSchema.safeParse(raw === null ? null : extractJson(raw));
+    let raw: string;
+    try {
+      raw = await provider.complete(system, user);
+    } catch (err) {
+      // Provider outage (LLM down/timeout/etc): leave the batch untouched — no attempts
+      // increment, no parking. This must retry indefinitely on later passes, unlike a real
+      // response that fails schema validation (handled below).
+      console.error("[compress] provider", err);
+      continue;
+    }
+    const parsed = obsDraftSchema.safeParse(extractJson(raw));
     if (!parsed.success) {
       db.run(`UPDATE events SET attempts = attempts + 1 WHERE id IN (${marks})`, ids);
       const parked = db.run(
@@ -70,7 +78,7 @@ export async function runCompressionPass(db: Database, provider: LlmProvider, no
       .all(session.id) as EventRow[]).reverse();
     const { system, user } = summaryPrompt(obs, lastEvents);
     let raw: string | null = null;
-    try { raw = await provider.complete(system, user); } catch { raw = null; }
+    try { raw = await provider.complete(system, user); } catch (err) { console.error("[compress] provider", err); raw = null; }
     const parsed = summaryDraftSchema.safeParse(raw === null ? null : extractJson(raw));
     if (!parsed.success) continue; // retried on a later pass
     db.run(

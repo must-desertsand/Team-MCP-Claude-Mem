@@ -1,5 +1,10 @@
 #!/bin/bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../.env"
+if [ -z "${DB_PATH:-}" ] && [ -f "$ENV_FILE" ]; then
+  DB_PATH="$(grep -E '^DB_PATH=' "$ENV_FILE" | tail -1 | cut -d= -f2-)"
+fi
 DB="${DB_PATH:-$HOME/.team-mem-server/data.db}"
 DEST="$HOME/.team-mem-server/backups"
 mkdir -p "$DEST"

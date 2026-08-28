@@ -65,6 +65,7 @@ prerequisite E1, below) — substitute the real address once it's assigned.
    ```bash
    mkdir -p ~/Library/LaunchAgents
    cp deploy/com.must.team-mem.plist deploy/com.must.team-mem.backup.plist ~/Library/LaunchAgents/
+   mkdir -p ~/.team-mem-server/logs
    launchctl load ~/Library/LaunchAgents/com.must.team-mem.plist
    launchctl load ~/Library/LaunchAgents/com.must.team-mem.backup.plist
    ```

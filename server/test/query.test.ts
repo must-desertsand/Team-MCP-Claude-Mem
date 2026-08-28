@@ -103,10 +103,10 @@ describe("REST", () => {
     const app = buildApp(db, CFG);
     const get = (p: string, t: string) => app.request(p, { headers: { authorization: `Bearer ${t}` } });
     expect((await get("/api/status", svc.token)).status).toBe(200);
-    const search = await (await get("/api/search?q=auth", svc.token)).json();
+    const search = (await (await get("/api/search?q=auth", svc.token)).json()) as any[];
     expect(search.length).toBe(2);
     expect((await get("/api/search", svc.token)).status).toBe(400);
-    const detail = await (await get("/api/sessions/s-h", svc.token)).json();
+    const detail = (await (await get("/api/sessions/s-h", svc.token)).json()) as any;
     expect(detail.observations.length).toBe(2);
     const del = (t: string) => app.request("/api/sessions/s-h", { method: "DELETE", headers: { authorization: `Bearer ${t}` } });
     expect((await del(svc.token)).status).toBe(403);
@@ -119,11 +119,11 @@ describe("REST", () => {
 
     const search = await get("/api/search?q=auth&limit=notanumber", svc.token);
     expect(search.status).toBe(200);
-    expect((await search.json()).length).toBe(2);
+    expect(((await search.json()) as any[]).length).toBe(2);
 
     const status = await get("/api/status?days=notanumber", svc.token);
     expect(status.status).toBe(200);
-    const body = await status.json();
+    const body = (await status.json()) as any[];
     expect(body.map((e: any) => e.user)).toEqual(["haseeb", "hoyoung", "yameen"]);
     expect(body.find((e: any) => e.user === "haseeb").recent[0]).toContain("auth work done today");
   });

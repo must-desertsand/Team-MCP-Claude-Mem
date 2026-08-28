@@ -140,9 +140,10 @@ describe("session-start.js", () => {
 describe("manifests", () => {
   test("hooks.json wires the four hooks", () => {
     const hooks = JSON.parse(readFileSync(join(import.meta.dir, "..", "hooks", "hooks.json"), "utf8")).hooks;
-    expect(Object.keys(hooks).sort()).toEqual(["PostToolUse", "SessionStart", "Stop", "UserPromptSubmit"]);
+    expect(Object.keys(hooks).sort()).toEqual(["PostToolUse", "SessionEnd", "SessionStart", "UserPromptSubmit"]);
     expect(hooks.SessionStart[0].matcher).toBe("startup|clear|compact");
     expect(hooks.PostToolUse[0].hooks[0].command).toContain("send-event.js\" tool");
+    expect(hooks.SessionEnd[0].hooks[0].command).toContain("send-event.js\" end");
   });
   test("mcp + plugin + marketplace manifests parse", () => {
     const mcp = JSON.parse(readFileSync(join(import.meta.dir, "..", ".mcp.json"), "utf8"));

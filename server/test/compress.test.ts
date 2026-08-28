@@ -72,6 +72,27 @@ describe("runCompressionPass", () => {
     expect((db.query(`SELECT COUNT(*) AS n FROM events WHERE compressed = -1`).get() as any).n).toBe(BATCH_MIN);
     expect((db.query(`SELECT COUNT(*) AS n FROM observations`).get() as any).n).toBe(0);
   });
+  test("provider outage (throwing complete) leaves the batch untouched, no attempts/parking; recovers once the provider comes back", async () => {
+    const { db, userRow } = setup();
+    ingestEvents(db, MAP, userRow, mkEvents(BATCH_MIN));
+    const fake = new FakeProvider(); // empty queue -> complete() throws every call
+    for (let i = 0; i < 3; i++) {
+      const stats = await runCompressionPass(db, fake);
+      expect(stats.parked).toBe(0);
+      expect(stats.observations).toBe(0);
+    }
+    const rows = db.query(`SELECT compressed, attempts FROM events`).all() as any[];
+    expect(rows.length).toBe(BATCH_MIN);
+    for (const r of rows) {
+      expect(r.compressed).toBe(0);
+      expect(r.attempts).toBe(0);
+    }
+    // Provider recovers: queue a valid response and confirm the same events compress normally.
+    fake.queue.push(OBS_JSON);
+    const stats = await runCompressionPass(db, fake);
+    expect(stats.observations).toBe(2);
+    expect((db.query(`SELECT COUNT(*) AS n FROM events WHERE compressed = 1`).get() as any).n).toBe(BATCH_MIN);
+  });
   test("abandoned session is swept, summarized", async () => {
     const { db, userRow } = setup();
     ingestEvents(db, MAP, userRow, mkEvents(3));

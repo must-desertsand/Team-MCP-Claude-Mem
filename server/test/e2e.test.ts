@@ -53,7 +53,7 @@ test("two users share memory end to end", async () => {
 
   // ...and can search the team memory
   const search = await app.request("/api/search?q=auth", { headers: { authorization: `Bearer ${yameen.token}` } });
-  const hits = await search.json();
+  const hits = (await search.json()) as any[];
   expect(hits.length).toBeGreaterThan(0);
   expect(hits.some((h: any) => h.user === "haseeb")).toBe(true);
 

@@ -1,6 +1,7 @@
 {
   "name": "must-desertsand",
   "owner": { "name": "l2u team" },
+  "description": "Internal plugins of the l2u team — team-mem shared Claude Code memory.",
   "plugins": [
     {
       "name": "team-mem",

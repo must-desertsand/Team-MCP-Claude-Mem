@@ -33,6 +33,10 @@ describe("buildEvent", () => {
     const e = lib.buildEvent("tool", input({ tool_name: "Read", tool_input: { file_path: "/app/.env.local" }, tool_response: "SECRET=x" }), "mustfintech/web", null);
     expect(e.result).toBe("[REDACTED .env file]");
   });
+  test("uppercase .ENV reads are fully redacted too", () => {
+    const e = lib.buildEvent("tool", input({ tool_name: "Read", tool_input: { file_path: "/app/.ENV" }, tool_response: "SECRET=x" }), "mustfintech/web", null);
+    expect(e.result).toBe("[REDACTED .env file]");
+  });
   test("missing session id yields null", () => {
     expect(lib.buildEvent("prompt", { prompt: "hi" }, "mustfintech/web", null)).toBeNull();
   });

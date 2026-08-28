@@ -74,18 +74,18 @@ plugin/    Claude Code plugin every teammate installs (zero-dependency hooks)
 docs/      Design spec and implementation plan
 ```
 
-## Planned setup (once v1 lands)
+## Setup
 
 **Teammates** (each machine):
 
 ```bash
 claude plugin marketplace add must-desertsand/Team-MCP-Claude-Mem
-claude plugin install team-mem
+claude plugin install team-mem@must-desertsand
 # then export TEAM_MEM_URL and TEAM_MEM_TOKEN in your shell profile
 ```
 
 **Server** (Mac Studio, once): run under launchd on port 7337; nightly SQLite
-backups. Full steps will live in `server/deploy/SETUP.md`.
+backups. Full steps: [`server/deploy/SETUP.md`](server/deploy/SETUP.md).
 
 ## Roadmap after v1
 

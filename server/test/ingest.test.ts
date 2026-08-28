@@ -72,6 +72,25 @@ describe("POST /ingest", () => {
     const s = db.query(`SELECT ended_at FROM sessions WHERE id='sess-0001'`).get() as any;
     expect(s.ended_at).not.toBeNull();
   });
+  test("a non-end event on an ended session clears ended_at and deletes the stale summary", async () => {
+    const { db, app, member } = setup();
+    await post(app, member.token, { events: [evt(), evt({ kind: "end", ts: 222 })] });
+    const before = db.query(`SELECT ended_at FROM sessions WHERE id='sess-0001'`).get() as any;
+    expect(before.ended_at).not.toBeNull();
+
+    // Simulate the worker having already summarized this (ended) session.
+    const project = db.query(`SELECT id FROM projects WHERE repo_key = 'mustfintech/web'`).get() as any;
+    db.run(
+      `INSERT INTO summaries(session_id, user_id, project_id, ts, body, open_threads) VALUES (?, ?, ?, ?, ?, ?)`,
+      ["sess-0001", member.id, project.id, Date.now(), "stale summary body", ""],
+    );
+    expect((db.query(`SELECT COUNT(*) AS n FROM summaries`).get() as any).n).toBe(1);
+
+    await post(app, member.token, { events: [evt({ kind: "tool", tool: "Edit", input: "x", result: "y", ts: 333 })] });
+    const after = db.query(`SELECT ended_at FROM sessions WHERE id='sess-0001'`).get() as any;
+    expect(after.ended_at).toBeNull();
+    expect((db.query(`SELECT COUNT(*) AS n FROM summaries`).get() as any).n).toBe(0);
+  });
   test("rejects events for another user's session", async () => {
     const { db, app, member } = setup();
     const other = createUser(db, "yameen");

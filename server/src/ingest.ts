@@ -31,8 +31,8 @@ export function ingestEvents(
       const e = parsed.data;
       try {
         const project = ensureProject(db, e.repo, map);
-        const session = db.query(`SELECT user_id FROM sessions WHERE id = ?`).get(e.session) as
-          | { user_id: number } | null;
+        const session = db.query(`SELECT user_id, ended_at FROM sessions WHERE id = ?`).get(e.session) as
+          | { user_id: number; ended_at: number | null } | null;
         if (session && session.user_id !== user.id) { rejected++; continue; }
         const endedAt = e.kind === "end" ? now : null;
         if (!session) {
@@ -42,10 +42,18 @@ export function ingestEvents(
             [e.session, user.id, project.id, e.branch ?? null, now, now, endedAt],
           );
         } else {
+          // Non-end activity on a previously-ended session means it resumed: clear ended_at
+          // (rather than preserving it via COALESCE) so the abandoned/end sweep re-evaluates it.
           db.run(
-            `UPDATE sessions SET last_event_at = ?, branch = COALESCE(branch, ?), ended_at = COALESCE(?, ended_at) WHERE id = ?`,
+            `UPDATE sessions SET last_event_at = ?, branch = COALESCE(branch, ?), ended_at = ? WHERE id = ?`,
             [now, e.branch ?? null, endedAt, e.session],
           );
+          // The resumed session's old summary is now stale (it didn't see this new activity);
+          // delete it (plain DELETE so the FTS trigger fires) so the worker regenerates it from
+          // ALL the session's observations at the next true end.
+          if (e.kind !== "end" && session.ended_at !== null) {
+            db.run(`DELETE FROM summaries WHERE session_id = ?`, [e.session]);
+          }
         }
         db.run(
           `INSERT INTO events(session_id, user_id, project_id, ts, kind, payload) VALUES (?, ?, ?, ?, ?, ?)`,

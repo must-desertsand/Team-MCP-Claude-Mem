@@ -35,7 +35,7 @@ function loadSettings(env = process.env) {
 
 function normalizeRemote(url) {
   if (!url || typeof url !== "string") return null;
-  let u = url.trim().replace(/\.git\/?$/, "");
+  let u = url.trim().replace(/\.git\/?$/i, "");
   if (!u) return null;
   if (u.includes("://")) {
     try {
@@ -79,6 +79,9 @@ function redact(text) {
   if (!text) return text;
   let t = String(text);
   t = t.replace(/-----BEGIN [A-Z ]*KEY-----[\s\S]*?-----END [A-Z ]*KEY-----/g, "[REDACTED]");
+  t = t.replace(/\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{16,}\b/g, "[REDACTED]");
+  t = t.replace(/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, "[REDACTED]");
+  t = t.replace(/(:\/\/[^\/\s:@"']+:)[^\/\s@"']+(@)/g, "$1[REDACTED]$2");
   t = t.replace(/\bbearer\s+[A-Za-z0-9._~+/-]{4,}=*/gi, "[REDACTED]");
   t = t.replace(/([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|authorization)[A-Za-z0-9_.-]*["']?\s*[:=]\s*["']?)([^\s"']+)/gi, "$1[REDACTED]");
   t = t.replace(/AKIA[0-9A-Z]{16}/g, "[REDACTED]");
@@ -112,7 +115,7 @@ function stringifyVal(v) {
 }
 function isEnvRead(input) {
   const p = input && typeof input === "object" ? (input.file_path || input.path || "") : String(input || "");
-  return /(^|\/)\.env[^/]*$/.test(String(p));
+  return /(^|\/)\.env[^/]*$/i.test(String(p));
 }
 
 function buildEvent(kind, hookInput, repoKey, branch) {

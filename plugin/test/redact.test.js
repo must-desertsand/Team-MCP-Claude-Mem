@@ -8,10 +8,19 @@ describe("redact", () => {
     ["AKIAIOSFODNN7EXAMPLE", "[REDACTED]"],
     ["jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dozjgNryP4J3jVmNHl0w5N65", "jwt [REDACTED]"],
     ["Bearer abcdefgh1234567890", "[REDACTED]"],
+    ["ghp_" + "a".repeat(36), "[REDACTED]"],
+    ["xoxb-" + "b".repeat(20), "[REDACTED]"],
   ];
   for (const [input, want] of cases) {
     test(`redacts: ${input.slice(0, 30)}`, () => expect(redact(input)).toBe(want));
   }
+  test("redacts userinfo in a connection URL but keeps host/path", () => {
+    expect(redact("postgres://l2u:S3cretPw@db.seoul:5432/app")).toBe("postgres://l2u:[REDACTED]@db.seoul:5432/app");
+  });
+  test("leaves a normal URL without userinfo unchanged", () => {
+    const url = "https://github.com/mustfintech/web";
+    expect(redact(url)).toBe(url);
+  });
   test("redacts PEM blocks", () => {
     const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\nlines\n-----END RSA PRIVATE KEY-----";
     expect(redact(`before\n${pem}\nafter`)).toBe("before\n[REDACTED]\nafter");
