@@ -1,0 +1,11 @@
+{
+  "name": "must-desertsand",
+  "owner": { "name": "l2u team" },
+  "plugins": [
+    {
+      "name": "team-mem",
+      "source": "./plugin",
+      "description": "Shared team memory for Claude Code (central server on the Mac Studio)."
+    }
+  ]
+}

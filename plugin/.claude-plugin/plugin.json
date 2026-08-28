@@ -1,0 +1,8 @@
+{
+  "name": "team-mem",
+  "version": "0.1.0",
+  "description": "Shared team memory for Claude Code — records work on team projects to the central team-mem server and briefs each session with teammates' recent activity.",
+  "author": { "name": "l2u team" },
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}

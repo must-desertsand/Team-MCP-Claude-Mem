@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "team-memory": {
+      "type": "http",
+      "url": "${TEAM_MEM_URL:-http://localhost:7337}/mcp",
+      "headers": { "Authorization": "Bearer ${TEAM_MEM_TOKEN}" }
+    }
+  }
+}
