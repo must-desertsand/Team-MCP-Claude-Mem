@@ -3,8 +3,9 @@ import type { Database } from "bun:sqlite";
 import type { Config } from "./config";
 import type { UserRow } from "./db";
 import { userByToken } from "./auth";
-import { loadWorkspaces } from "./projects";
+import { loadWorkspaces, REPO_KEY_RE } from "./projects";
 import { ingestEvents } from "./ingest";
+import { buildBriefing } from "./briefing";
 
 export type AppEnv = { Variables: { user: UserRow } };
 
@@ -36,6 +37,13 @@ export function buildApp(db: Database, cfg: Config): Hono<AppEnv> {
     }
     const r = ingestEvents(db, map, user, events);
     return c.json({ ok: true, ...r });
+  });
+
+  app.get("/context", (c) => {
+    const repo = c.req.query("repo") ?? "";
+    if (!REPO_KEY_RE.test(repo)) return c.text("bad repo", 400);
+    const briefing = buildBriefing(db, c.get("user"), repo, map);
+    return briefing ? c.text(briefing) : c.body(null, 204);
   });
 
   return app;
