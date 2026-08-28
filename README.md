@@ -59,10 +59,12 @@ team — that is the product.
 
 ## Status
 
-**In development.** Design is finalized; implementation is in progress.
+**v1 implemented.** Server and plugin are both built and all tests are
+green; deployment onto the Mac Studio is pending.
 
 - Design spec: [`docs/superpowers/specs/2026-08-28-team-mem-design.md`](docs/superpowers/specs/2026-08-28-team-mem-design.md)
 - Implementation plan: [`docs/superpowers/plans/2026-08-28-team-mem.md`](docs/superpowers/plans/2026-08-28-team-mem.md)
+- Setup guide: [`server/deploy/SETUP.md`](server/deploy/SETUP.md)
 
 ## Repository layout
 
