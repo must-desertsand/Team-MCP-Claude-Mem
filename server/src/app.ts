@@ -7,6 +7,8 @@ import { loadWorkspaces, REPO_KEY_RE } from "./projects";
 import { ingestEvents } from "./ingest";
 import { buildBriefing } from "./briefing";
 import { registerRestRoutes } from "./rest";
+import { StreamableHTTPTransport } from "@hono/mcp";
+import { buildMcpServer } from "./mcp";
 
 export type AppEnv = { Variables: { user: UserRow } };
 
@@ -48,6 +50,14 @@ export function buildApp(db: Database, cfg: Config): Hono<AppEnv> {
   });
 
   registerRestRoutes(app, db);
+
+  const mcpTransport = new StreamableHTTPTransport();
+  const mcpServer = buildMcpServer(db);
+  const mcpReady = mcpServer.connect(mcpTransport);
+  app.all("/mcp", async (c) => {
+    await mcpReady;
+    return mcpTransport.handleRequest(c);
+  });
 
   return app;
 }
