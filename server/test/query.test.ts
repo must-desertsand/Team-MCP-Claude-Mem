@@ -112,4 +112,19 @@ describe("REST", () => {
     expect((await del(svc.token)).status).toBe(403);
     expect((await del(h.token)).status).toBe(200);
   });
+  test("tolerates malformed numeric query params instead of erroring", async () => {
+    const { db, svc } = seed();
+    const app = buildApp(db, CFG);
+    const get = (p: string, t: string) => app.request(p, { headers: { authorization: `Bearer ${t}` } });
+
+    const search = await get("/api/search?q=auth&limit=notanumber", svc.token);
+    expect(search.status).toBe(200);
+    expect((await search.json()).length).toBe(2);
+
+    const status = await get("/api/status?days=notanumber", svc.token);
+    expect(status.status).toBe(200);
+    const body = await status.json();
+    expect(body.map((e: any) => e.user)).toEqual(["haseeb", "hoyoung", "yameen"]);
+    expect(body.find((e: any) => e.user === "haseeb").recent[0]).toContain("auth work done today");
+  });
 });
