@@ -12,8 +12,11 @@ const [, , cmd, sub, ...rest] = Bun.argv;
 if (cmd === "user" && sub === "add") {
   const name = rest[0];
   const roleIdx = rest.indexOf("--role");
-  const role = (roleIdx >= 0 ? rest[roleIdx + 1] : "member") as Role;
+  const roleStr = roleIdx >= 0 ? rest[roleIdx + 1] : "member";
+  const validRoles: Role[] = ["member", "service", "admin"];
+  const role = roleStr as Role;
   if (!name) { console.error("usage: bun run admin user add <name> [--role member|service|admin]"); process.exit(1); }
+  if (!validRoles.includes(role)) { console.error("usage: bun run admin user add <name> [--role member|service|admin]"); process.exit(1); }
   const u = createUser(db, name, role);
   console.log(`created ${u.name} (${u.role})`);
   console.log(`token (shown once): ${u.token}`);
