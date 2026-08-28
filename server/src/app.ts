@@ -6,6 +6,7 @@ import { userByToken } from "./auth";
 import { loadWorkspaces, REPO_KEY_RE } from "./projects";
 import { ingestEvents } from "./ingest";
 import { buildBriefing } from "./briefing";
+import { registerRestRoutes } from "./rest";
 
 export type AppEnv = { Variables: { user: UserRow } };
 
@@ -45,6 +46,8 @@ export function buildApp(db: Database, cfg: Config): Hono<AppEnv> {
     const briefing = buildBriefing(db, c.get("user"), repo, map);
     return briefing ? c.text(briefing) : c.body(null, 204);
   });
+
+  registerRestRoutes(app, db);
 
   return app;
 }
