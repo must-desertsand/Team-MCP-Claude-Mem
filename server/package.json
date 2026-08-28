@@ -1,0 +1,18 @@
+{
+  "name": "team-mem-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "admin": "bun run admin.ts"
+  },
+  "dependencies": {
+    "@hono/mcp": "^0.3.2",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "hono": "^4.13.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "bun-types": "^1.4.0"
+  }
+}

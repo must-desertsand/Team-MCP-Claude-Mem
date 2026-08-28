@@ -1,0 +1,9 @@
+{
+  "name": "team-mcp-claude-mem",
+  "private": true,
+  "scripts": {
+    "test": "bun test server plugin",
+    "test:server": "bun test server",
+    "test:plugin": "bun test plugin"
+  }
+}
