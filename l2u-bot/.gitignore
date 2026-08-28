@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+audit/*.jsonl
+*.log
+.DS_Store
+logs/
+.l2u-bot.lock

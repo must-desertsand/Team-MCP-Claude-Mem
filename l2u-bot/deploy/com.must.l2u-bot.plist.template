@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd job for l2u-bot.
+
+  Install as a LaunchAgent (runs as your user, needs a login session):
+      cp deploy/com.must.l2u-bot.plist.template ~/Library/LaunchAgents/com.must.l2u-bot.plist
+      # replace __PLACEHOLDERS__ below, then:
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.must.l2u-bot.plist
+      launchctl kickstart -p gui/$(id -u)/com.must.l2u-bot
+
+  To stop:
+      launchctl bootout gui/$(id -u)/com.must.l2u-bot
+
+  Notes for an always-on shared host:
+    - KeepAlive restarts the bot if it crashes or is killed.
+    - Sleep drops the Socket Mode connection. Disable it:  sudo pmset -a sleep 0 disksleep 0
+    - A LaunchAgent needs the user to be logged in. Either enable automatic login,
+      or install as a LaunchDaemon in /Library/LaunchDaemons (runs as root at boot).
+    - A LaunchDaemon cannot read the login keychain, so `gh` must authenticate via
+      GH_TOKEN rather than `gh auth login`. Set it in EnvironmentVariables below.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.must.l2u-bot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PNPM_PATH__</string>
+        <string>start</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_DIR__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- launchd starts with a minimal PATH; node, pnpm, git and gh must be reachable. -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <!-- Required when running as a daemon: the login keychain is unavailable. -->
+        <key>GH_TOKEN</key>
+        <string>__GH_TOKEN__</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Do not hammer Slack if startup keeps failing. -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_DIR__/logs/l2u-bot.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_DIR__/logs/l2u-bot.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
