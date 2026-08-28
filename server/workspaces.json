@@ -1,0 +1,9 @@
+{
+  "l2u": [
+    "mustfintech/l2u-sandbox",
+    "mustfintech/web",
+    "mustfintech/app",
+    "mustfintech/l2u-2nd"
+  ],
+  "team-mem": ["must-desertsand/team-mcp-claude-mem"]
+}
