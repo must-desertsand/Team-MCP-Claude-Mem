@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { openDb } from "../src/db";
-import { createUser } from "../src/auth";
+import { createUser, userByToken } from "../src/auth";
 import { buildApp } from "../src/app";
+import { ingestEvents } from "../src/ingest";
+import { ensureProject } from "../src/projects";
 import type { Config } from "../src/config";
 
 const CFG: Config = {
@@ -64,6 +66,12 @@ describe("POST /ingest", () => {
     const s = db.query(`SELECT ended_at FROM sessions WHERE id='sess-0001'`).get() as any;
     expect(s.ended_at).not.toBeNull();
   });
+  test("end as the very first event for a brand-new session still sets ended_at", async () => {
+    const { db, app, member } = setup();
+    await post(app, member.token, { events: [evt({ kind: "end" })] });
+    const s = db.query(`SELECT ended_at FROM sessions WHERE id='sess-0001'`).get() as any;
+    expect(s.ended_at).not.toBeNull();
+  });
   test("rejects events for another user's session", async () => {
     const { db, app, member } = setup();
     const other = createUser(db, "yameen");
@@ -86,5 +94,26 @@ describe("POST /ingest", () => {
     const { app, member } = setup();
     const res = await post(app, member.token, { events: [evt({ text: "x".repeat(300_000) })] });
     expect(res.status).toBe(413);
+  });
+});
+
+describe("ingestEvents error isolation", () => {
+  test("an exception while processing one event does not abort the rest of the batch", () => {
+    const db = openDb(":memory:");
+    const created = createUser(db, "haseeb");
+    const member = userByToken(db, created.token);
+    if (!member) throw new Error("unreachable: just created this user");
+    // Pre-cache this project so its lookup short-circuits before touching the map.
+    ensureProject(db, "mustfintech/app", {});
+    // A workspaces map with a non-array value mimics a malformed workspaces.json:
+    // loadWorkspaces only checks `typeof parsed === "object"`, so this can reach
+    // ingestEvents for real. workspaceFor's `repos.some(...)` throws on it.
+    const corruptMap = { ws: "not-an-array" } as unknown as Record<string, string[]>;
+    const result = ingestEvents(db, corruptMap, member, [
+      evt({ repo: "mustfintech/web" }), // uncached repo -> workspaceFor(corruptMap) throws
+      evt({ session: "sess-0002", repo: "mustfintech/app" }), // cached repo -> unaffected
+    ]);
+    expect(result.accepted).toBe(1);
+    expect(result.rejected).toBe(1);
   });
 });

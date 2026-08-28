@@ -29,27 +29,32 @@ export function ingestEvents(
       const parsed = eventSchema.safeParse(raw);
       if (!parsed.success) { rejected++; continue; }
       const e = parsed.data;
-      const project = ensureProject(db, e.repo, map);
-      const session = db.query(`SELECT user_id FROM sessions WHERE id = ?`).get(e.session) as
-        | { user_id: number } | null;
-      if (session && session.user_id !== user.id) { rejected++; continue; }
-      if (!session) {
+      try {
+        const project = ensureProject(db, e.repo, map);
+        const session = db.query(`SELECT user_id FROM sessions WHERE id = ?`).get(e.session) as
+          | { user_id: number } | null;
+        if (session && session.user_id !== user.id) { rejected++; continue; }
+        const endedAt = e.kind === "end" ? now : null;
+        if (!session) {
+          db.run(
+            `INSERT INTO sessions(id, user_id, project_id, branch, started_at, last_event_at, ended_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [e.session, user.id, project.id, e.branch ?? null, now, now, endedAt],
+          );
+        } else {
+          db.run(
+            `UPDATE sessions SET last_event_at = ?, branch = COALESCE(branch, ?), ended_at = COALESCE(?, ended_at) WHERE id = ?`,
+            [now, e.branch ?? null, endedAt, e.session],
+          );
+        }
         db.run(
-          `INSERT INTO sessions(id, user_id, project_id, branch, started_at, last_event_at, ended_at)
-           VALUES (?, ?, ?, ?, ?, ?, NULL)`,
-          [e.session, user.id, project.id, e.branch ?? null, now, now],
+          `INSERT INTO events(session_id, user_id, project_id, ts, kind, payload) VALUES (?, ?, ?, ?, ?, ?)`,
+          [e.session, user.id, project.id, now, e.kind, JSON.stringify(e)],
         );
-      } else {
-        db.run(
-          `UPDATE sessions SET last_event_at = ?, branch = COALESCE(branch, ?)${e.kind === "end" ? ", ended_at = " + now : ""} WHERE id = ?`,
-          [now, e.branch ?? null, e.session],
-        );
+        accepted++;
+      } catch {
+        rejected++;
       }
-      db.run(
-        `INSERT INTO events(session_id, user_id, project_id, ts, kind, payload) VALUES (?, ?, ?, ?, ?, ?)`,
-        [e.session, user.id, project.id, now, e.kind, JSON.stringify(e)],
-      );
-      accepted++;
     }
   });
   tx();
