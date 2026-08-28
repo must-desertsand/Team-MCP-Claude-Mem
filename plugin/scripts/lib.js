@@ -98,6 +98,92 @@ function capHeadTail(s, max = 1500, head = 1000, tail = 500) {
   return s.slice(0, head) + "\n…[snip]…\n" + s.slice(-tail);
 }
 
+const SKIP_TOOLS = new Set([
+  "TodoWrite", "AskUserQuestion", "Skill", "SlashCommand", "ExitPlanMode", "ListMcpResourcesTool", "ToolSearch",
+]);
+function shouldSkipTool(name) {
+  return !name || SKIP_TOOLS.has(name) || String(name).startsWith("mcp__team-memory__");
+}
+
+function stringifyVal(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  try { return JSON.stringify(v); } catch { return String(v); }
+}
+function isEnvRead(input) {
+  const p = input && typeof input === "object" ? (input.file_path || input.path || "") : String(input || "");
+  return /(^|\/)\.env[^/]*$/.test(String(p));
+}
+
+function buildEvent(kind, hookInput, repoKey, branch) {
+  const session = String(hookInput.session_id || "");
+  if (session.length < 8) return null;
+  const e = { kind, session, repo: repoKey, ts: Date.now() };
+  if (branch) e.branch = String(branch).slice(0, 200);
+  if (kind === "prompt") e.text = redact(cap(String(hookInput.prompt ?? ""), 4000));
+  if (kind === "tool") {
+    if (shouldSkipTool(hookInput.tool_name)) return null;
+    e.tool = String(hookInput.tool_name).slice(0, 200);
+    e.input = redact(cap(stringifyVal(hookInput.tool_input), 500));
+    e.result = isEnvRead(hookInput.tool_input)
+      ? "[REDACTED .env file]"
+      : redact(capHeadTail(stringifyVal(hookInput.tool_response), 1500, 1000, 500));
+  }
+  let json = JSON.stringify(e);
+  if (json.length > 8192 && e.result) { e.result = cap(e.result, 500); json = JSON.stringify(e); }
+  if (json.length > 8192) return null;
+  return e;
+}
+
+const SPOOL_MAX_BYTES = 5 * 1024 * 1024;
+function spoolDir(env = process.env) { return path.join(teamMemDir(env), "spool"); }
+
+function writeSpoolEvent(event, env = process.env) {
+  try {
+    const dir = spoolDir(env);
+    fs.mkdirSync(dir, { recursive: true });
+    const name = `evt-${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 8)}.json`;
+    fs.writeFileSync(path.join(dir, name), JSON.stringify(event));
+    pruneSpool(env);
+  } catch {}
+}
+
+function pruneSpool(env = process.env) {
+  try {
+    const dir = spoolDir(env);
+    const files = fs.readdirSync(dir).filter(f => f.startsWith("evt-")).map(f => {
+      const st = fs.statSync(path.join(dir, f));
+      return { f, size: st.size, mtime: st.mtimeMs };
+    }).sort((a, b) => a.mtime - b.mtime);
+    let total = files.reduce((s, x) => s + x.size, 0);
+    for (const x of files) {
+      if (total <= SPOOL_MAX_BYTES) break;
+      try { fs.unlinkSync(path.join(dir, x.f)); total -= x.size; } catch {}
+    }
+  } catch {}
+}
+
+function claimSpool(limit = 50, env = process.env) {
+  const dir = spoolDir(env);
+  const claimed = [], events = [];
+  let names = [];
+  try { names = fs.readdirSync(dir).filter(f => /^evt-.*\.json$/.test(f)).sort().slice(0, limit); }
+  catch { return { events, claimed }; }
+  for (const name of names) {
+    const from = path.join(dir, name);
+    const to = `${from}.claim-${process.pid}`;
+    try { fs.renameSync(from, to); } catch { continue; } // raced: another sender claimed it
+    try { events.push(JSON.parse(fs.readFileSync(to, "utf8"))); claimed.push(to); }
+    catch { try { fs.unlinkSync(to); } catch {} } // corrupt file: drop it
+  }
+  return { events, claimed };
+}
+function removeClaims(claimed) { for (const p of claimed) { try { fs.unlinkSync(p); } catch {} } }
+function releaseClaims(claimed) {
+  for (const p of claimed) { try { fs.renameSync(p, p.replace(/\.claim-\d+$/, "")); } catch {} }
+}
+
 module.exports = {
   readStdin, teamMemDir, loadSettings, normalizeRemote, repoKeyFor, gitBranch, matchPattern, isAllowed, redact, cap, capHeadTail,
+  shouldSkipTool, buildEvent, writeSpoolEvent, claimSpool, removeClaims, releaseClaims,
 };
