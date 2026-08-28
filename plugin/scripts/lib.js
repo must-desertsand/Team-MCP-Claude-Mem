@@ -120,14 +120,17 @@ function buildEvent(kind, hookInput, repoKey, branch) {
   if (session.length < 8) return null;
   const e = { kind, session, repo: repoKey, ts: Date.now() };
   if (branch) e.branch = String(branch).slice(0, 200);
-  if (kind === "prompt") e.text = redact(cap(String(hookInput.prompt ?? ""), 4000));
+  // Pre-cap at ~4x the target to bound regex cost (buildEvent runs synchronously in the hook
+  // process), then redact, then apply the FINAL exact cap. redact() can grow text (e.g.
+  // "token=1" -> "token=[REDACTED]"), so only the cap applied *after* redact is authoritative.
+  if (kind === "prompt") e.text = cap(redact(cap(String(hookInput.prompt ?? ""), 16000)), 4000);
   if (kind === "tool") {
     if (shouldSkipTool(hookInput.tool_name)) return null;
     e.tool = String(hookInput.tool_name).slice(0, 200);
-    e.input = redact(cap(stringifyVal(hookInput.tool_input), 500));
+    e.input = cap(redact(cap(stringifyVal(hookInput.tool_input), 2000)), 500);
     e.result = isEnvRead(hookInput.tool_input)
       ? "[REDACTED .env file]"
-      : redact(capHeadTail(stringifyVal(hookInput.tool_response), 1500, 1000, 500));
+      : capHeadTail(redact(capHeadTail(stringifyVal(hookInput.tool_response), 6000, 4000, 2000)), 1500, 1000, 500);
   }
   let json = JSON.stringify(e);
   if (json.length > 8192 && e.result) { e.result = cap(e.result, 500); json = JSON.stringify(e); }
@@ -151,7 +154,11 @@ function writeSpoolEvent(event, env = process.env) {
 function pruneSpool(env = process.env) {
   try {
     const dir = spoolDir(env);
-    const files = fs.readdirSync(dir).filter(f => f.startsWith("evt-")).map(f => {
+    // Same filter claimSpool uses for eligible names (`evt-*.json`, not `evt-*.json.claim-*`):
+    // in-flight claimed files must never be eviction candidates, or a sender that's mid-send
+    // during an offline-reconnect flood could have its claim silently deleted out from under
+    // it, and releaseClaims/removeClaims would then no-op on a file that no longer exists.
+    const files = fs.readdirSync(dir).filter(f => /^evt-.*\.json$/.test(f)).map(f => {
       const st = fs.statSync(path.join(dir, f));
       return { f, size: st.size, mtime: st.mtimeMs };
     }).sort((a, b) => a.mtime - b.mtime);
@@ -163,17 +170,44 @@ function pruneSpool(env = process.env) {
   } catch {}
 }
 
+const STALE_CLAIM_MS = 10 * 60 * 1000;   // recover claims abandoned by a crashed/killed sender
+const CLAIM_MAX_BYTES = 200_000;         // stay well under the server's 256KB ingest body cap
+
+// A sender that's killed between claiming a file and removing/releasing it leaves a
+// `.claim-<pid>` file that nothing will ever pick up again. Before listing claimable events,
+// rename any claim file older than the threshold back to its base name so it rejoins the queue.
+function recoverStaleClaims(dir) {
+  let entries = [];
+  try { entries = fs.readdirSync(dir); } catch { return; }
+  const cutoff = Date.now() - STALE_CLAIM_MS;
+  for (const f of entries) {
+    if (!/\.claim-\d+$/.test(f)) continue;
+    const p = path.join(dir, f);
+    try {
+      if (fs.statSync(p).mtimeMs < cutoff) fs.renameSync(p, p.replace(/\.claim-\d+$/, ""));
+    } catch {} // gone, raced, or already recovered elsewhere — fine either way
+  }
+}
+
 function claimSpool(limit = 50, env = process.env) {
   const dir = spoolDir(env);
   const claimed = [], events = [];
+  recoverStaleClaims(dir);
   let names = [];
   try { names = fs.readdirSync(dir).filter(f => /^evt-.*\.json$/.test(f)).sort().slice(0, limit); }
   catch { return { events, claimed }; }
+  let bytes = 0;
   for (const name of names) {
     const from = path.join(dir, name);
+    let raw;
+    try { raw = fs.readFileSync(from, "utf8"); } catch { continue; } // gone/raced before we could read it
+    // Stop claiming once the batch would cross the ingest-safe byte budget; leave the rest for
+    // the next flush rather than building an oversized batch the server will 413 forever.
+    // Always let the first item through so one file can't wedge the queue by itself.
+    if (claimed.length > 0 && bytes + raw.length > CLAIM_MAX_BYTES) break;
     const to = `${from}.claim-${process.pid}`;
     try { fs.renameSync(from, to); } catch { continue; } // raced: another sender claimed it
-    try { events.push(JSON.parse(fs.readFileSync(to, "utf8"))); claimed.push(to); }
+    try { events.push(JSON.parse(raw)); claimed.push(to); bytes += raw.length; }
     catch { try { fs.unlinkSync(to); } catch {} } // corrupt file: drop it
   }
   return { events, claimed };
