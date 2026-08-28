@@ -25,6 +25,18 @@ describe("redact", () => {
     const s = "We changed the auth flow to return a session object.";
     expect(redact(s)).toBe(s);
   });
+  test("redacts lowercase bearer tokens", () => {
+    const token = "a".repeat(30);
+    const result = redact("Authorization: bearer " + token);
+    expect(result).toContain("[REDACTED]");
+    expect(result).not.toContain(token);
+  });
+  test("redacts Bearer tokens under 8 chars", () => {
+    expect(redact("Bearer abc12")).toBe("[REDACTED]");
+  });
+  test("redacts compound key names with slash-bearing values", () => {
+    expect(redact("aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")).toBe("aws_secret_access_key = [REDACTED]");
+  });
 });
 
 describe("caps", () => {

@@ -79,8 +79,8 @@ function redact(text) {
   if (!text) return text;
   let t = String(text);
   t = t.replace(/-----BEGIN [A-Z ]*KEY-----[\s\S]*?-----END [A-Z ]*KEY-----/g, "[REDACTED]");
-  t = t.replace(/\bBearer\s+[A-Za-z0-9._~+/-]{8,}=*/g, "[REDACTED]");
-  t = t.replace(/((?:password|passwd|secret|token|api[_-]?key|authorization)["']?\s*[:=]\s*["']?)([^\s"']+)/gi, "$1[REDACTED]");
+  t = t.replace(/\bbearer\s+[A-Za-z0-9._~+/-]{4,}=*/gi, "[REDACTED]");
+  t = t.replace(/([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|authorization)[A-Za-z0-9_.-]*["']?\s*[:=]\s*["']?)([^\s"']+)/gi, "$1[REDACTED]");
   t = t.replace(/AKIA[0-9A-Z]{16}/g, "[REDACTED]");
   t = t.replace(/eyJ[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, "[REDACTED]");
   t = t.replace(/[A-Za-z0-9+]{40,}={0,2}/g, "[REDACTED]");
