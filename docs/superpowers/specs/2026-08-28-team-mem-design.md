@@ -89,8 +89,9 @@ Design invariants:
   cwd and normalizes it to `owner/repo` (handles SSH host aliases like
   `github.com-company:mustfintech/x.git`, HTTPS, and `.git` suffixes).
 - The result is matched against include patterns: `plugin/allowlist.json`
-  (ships with `["mustfintech/*"]`, updated via plugin updates) merged with the
-  user's local config. **No match → the hook exits immediately: no network call,
+  (ships with `["mustfintech/*", "must-desertsand/*"]` — both company orgs, so
+  work on team-mem itself is shared too; updated via plugin updates) merged
+  with the user's local config. **No match → the hook exits immediately: no network call,
   no spool entry, nothing recorded.** Non-git directories never match.
 - Local overrides in `~/.team-mem/config.json`:
   `{ "exclude": ["mustfintech/some-repo"], "include": [], "disabled": false }`.
