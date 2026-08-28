@@ -13,7 +13,7 @@ export function runRetention(db: Database, now = Date.now()): { events: number; 
       AND NOT EXISTS (SELECT 1 FROM summaries su WHERE su.session_id = sessions.id)
   `).all(now - D30) as Array<{ id: string }>;
   for (const s of old) {
-    db.run(`DELETE FROM events WHERE session_id = ?`, [s.id]);
+    events += db.run(`DELETE FROM events WHERE session_id = ?`, [s.id]).changes;
     db.run(`DELETE FROM sessions WHERE id = ?`, [s.id]);
   }
   return { events, sessions: old.length };

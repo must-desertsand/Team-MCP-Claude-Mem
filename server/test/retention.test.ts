@@ -37,12 +37,13 @@ describe("runRetention", () => {
   test("prunes observation-less sessions after 30d, keeps ones with knowledge", () => {
     const { db, addSession, addEvent } = seed();
     addSession("s-empty", 31);
-    addEvent("s-empty", 1, 31);
+    addEvent("s-empty", 1, 31);  // old compressed event in old session -> cascade deleted
     addSession("s-kept", 31);
     db.run(`INSERT INTO summaries(session_id,user_id,project_id,ts,body) VALUES ('s-kept',1,1,1,'did things')`);
     addSession("s-young", 2);
     const r = runRetention(db, NOW);
     expect(r.sessions).toBe(1);
+    expect(r.events).toBe(1);     // cascade-deleted event counted
     const left = (db.query(`SELECT id FROM sessions ORDER BY id`).all() as any[]).map(s => s.id);
     expect(left).toEqual(["s-kept", "s-young"]);
     expect((db.query(`SELECT COUNT(*) AS n FROM events WHERE session_id='s-empty'`).get() as any).n).toBe(0);
