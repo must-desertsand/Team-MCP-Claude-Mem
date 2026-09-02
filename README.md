@@ -72,6 +72,9 @@ green; deployment onto the Mac Studio is pending.
 server/    Bun + Hono + SQLite service that runs on the Mac Studio
 plugin/    Claude Code plugin every teammate installs (zero-dependency hooks)
 docs/      Design spec and implementation plan
+l2u-bot/   SUPERSEDED vendored snapshot - the live integration (team-mem tools
+           + security hardening) is a PR on the canonical repo:
+           https://github.com/must-goldenrod/l2u-bot/pull/1
 ```
 
 ## Setup
