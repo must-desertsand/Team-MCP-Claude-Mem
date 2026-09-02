@@ -355,3 +355,15 @@ in a small documented way from, the design above:
   checklist** kept in the implementation plan (not a script that ships in
   `server/test/`) — run once, by hand, against the real endpoint immediately
   after deployment, rather than as part of the automated suite.
+
+- **Security hardening (2026-09-02, PM/security review follow-up):** the client's
+  `.env`-read suppression grew into a full sensitive-file blocklist (`.env*`, keys,
+  certificates, `id_rsa*`, credentials, service accounts, secrets files — reads are
+  replaced with `[REDACTED sensitive file]` before leaving the machine). The server
+  now applies the same redaction rules as defense in depth: at ingest (a stale or
+  non-conforming client cannot put raw secrets in the store) and on LLM output when
+  observations/summaries are inserted. Memory served back into Claude sessions
+  (briefing, MCP tools) is framed inside `<untrusted_team_memory>` tags with
+  embedded-tag neutralization and a data-not-instructions notice, mirroring the
+  hardening PR'd to l2u-bot (must-goldenrod/l2u-bot#1). REST/JSON output stays
+  unwrapped: l2u-bot applies its own boundary at its tool choke point.

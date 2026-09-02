@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Database } from "bun:sqlite";
 import type { UserRow } from "./db";
 import { REPO_KEY_RE, ensureProject } from "./projects";
+import { redact } from "./redact";
 
 export const eventSchema = z.object({
   kind: z.enum(["prompt", "tool", "end"]),
@@ -28,7 +29,12 @@ export function ingestEvents(
     for (const raw of rawEvents) {
       const parsed = eventSchema.safeParse(raw);
       if (!parsed.success) { rejected++; continue; }
-      const e = parsed.data;
+      // Defense in depth: conforming clients redact before sending, but a stale
+      // or non-conforming client must not be able to put raw secrets in the store.
+      const e = { ...parsed.data };
+      if (e.text) e.text = redact(e.text);
+      if (e.input) e.input = redact(e.input);
+      if (e.result) e.result = redact(e.result);
       try {
         const project = ensureProject(db, e.repo, map);
         const session = db.query(`SELECT user_id, ended_at FROM sessions WHERE id = ?`).get(e.session) as

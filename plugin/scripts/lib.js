@@ -113,9 +113,20 @@ function stringifyVal(v) {
   if (typeof v === "string") return v;
   try { return JSON.stringify(v); } catch { return String(v); }
 }
-function isEnvRead(input) {
+// Files whose whole content is credential material. Their read results are
+// suppressed outright - redaction never gets the chance to miss.
+const SENSITIVE_FILE_PATTERNS = [
+  /(^|\/)\.env[^/]*$/i,
+  /\.(pem|key|p12|pfx|keystore|jks)$/i,
+  /(^|\/)id_(rsa|dsa|ecdsa|ed25519)[^/]*$/i,
+  /(^|\/)(\.npmrc|\.netrc|\.pgpass|\.git-credentials)$/i,
+  /(^|\/)credentials?(\.[a-z0-9]+)?$/i,
+  /service-?accounts?[^/]*\.json$/i,
+  /(^|\/)secrets?\.(json|ya?ml|toml|env)$/i,
+];
+function isSensitiveRead(input) {
   const p = input && typeof input === "object" ? (input.file_path || input.path || "") : String(input || "");
-  return /(^|\/)\.env[^/]*$/i.test(String(p));
+  return SENSITIVE_FILE_PATTERNS.some((re) => re.test(String(p)));
 }
 
 function buildEvent(kind, hookInput, repoKey, branch) {
@@ -131,8 +142,8 @@ function buildEvent(kind, hookInput, repoKey, branch) {
     if (shouldSkipTool(hookInput.tool_name)) return null;
     e.tool = String(hookInput.tool_name).slice(0, 200);
     e.input = cap(redact(cap(stringifyVal(hookInput.tool_input), 2000)), 500);
-    e.result = isEnvRead(hookInput.tool_input)
-      ? "[REDACTED .env file]"
+    e.result = isSensitiveRead(hookInput.tool_input)
+      ? "[REDACTED sensitive file]"
       : capHeadTail(redact(capHeadTail(stringifyVal(hookInput.tool_response), 6000, 4000, 2000)), 1500, 1000, 500);
   }
   let json = JSON.stringify(e);
@@ -222,5 +233,5 @@ function releaseClaims(claimed) {
 
 module.exports = {
   readStdin, teamMemDir, loadSettings, normalizeRemote, repoKeyFor, gitBranch, matchPattern, isAllowed, redact, cap, capHeadTail,
-  shouldSkipTool, buildEvent, writeSpoolEvent, claimSpool, removeClaims, releaseClaims,
+  shouldSkipTool, isSensitiveRead, buildEvent, writeSpoolEvent, claimSpool, removeClaims, releaseClaims,
 };

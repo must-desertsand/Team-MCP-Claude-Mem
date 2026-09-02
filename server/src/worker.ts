@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { EventRow, ObservationRow, SessionRow } from "./db";
 import type { LlmProvider } from "./provider";
 import { extractionPrompt, summaryPrompt, extractJson, obsDraftSchema, summaryDraftSchema } from "./prompts";
+import { redact } from "./redact";
 
 export const BATCH_MIN = 20;
 export const BATCH_MAX = 40;
@@ -54,7 +55,7 @@ export async function runCompressionPass(db: Database, provider: LlmProvider, no
         db.run(
           `INSERT INTO observations(session_id, user_id, project_id, ts, type, title, body, files, tags)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [session.id, session.user_id, session.project_id, now, d.type, d.title, d.body,
+          [session.id, session.user_id, session.project_id, now, d.type, redact(d.title), redact(d.body),
            JSON.stringify(d.files), JSON.stringify(d.tags)],
         );
         stats.observations++;
@@ -83,7 +84,7 @@ export async function runCompressionPass(db: Database, provider: LlmProvider, no
     if (!parsed.success) continue; // retried on a later pass
     db.run(
       `INSERT INTO summaries(session_id, user_id, project_id, ts, body, open_threads) VALUES (?, ?, ?, ?, ?, ?)`,
-      [session.id, session.user_id, session.project_id, now, parsed.data.body, parsed.data.open_threads],
+      [session.id, session.user_id, session.project_id, now, redact(parsed.data.body), redact(parsed.data.open_threads)],
     );
     stats.summaries++;
   }

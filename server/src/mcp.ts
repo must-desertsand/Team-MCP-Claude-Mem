@@ -2,9 +2,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Database } from "bun:sqlite";
 import { teamStatus, teamSearch, teamTimeline, teamGet } from "./query";
+import { tagUntrustedMemory } from "./redact";
 
 function text(data: unknown) {
-  return { content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data, null, 1) }] };
+  const raw = typeof data === "string" ? data : JSON.stringify(data, null, 1);
+  // Memory content is teammate-authored retrieved data; frame it as such for the
+  // querying agent, with embedded tag copies neutralized.
+  return { content: [{ type: "text" as const, text: tagUntrustedMemory(raw) }] };
 }
 
 export function buildMcpServer(db: Database): McpServer {

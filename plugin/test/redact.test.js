@@ -64,3 +64,30 @@ describe("caps", () => {
     expect(capHeadTail("small", 1500, 1000, 500)).toBe("small");
   });
 });
+
+describe("sensitive-file blocklist breadth", () => {
+  const lib = require("../scripts/lib.js");
+  const blocked = [
+    "/app/.env.production", "certs/server.pem", "deploy/signing.key",
+    "/Users/x/.ssh/id_rsa", ".npmrc", "ops/credentials", "gcp/credentials.json",
+    "service-account-prod.json", "config/secrets.yaml", "app.keystore",
+  ];
+  const allowed = [
+    "src/env.ts", "docs/environment.md", "envoy.yaml", "src/config.ts",
+    "backend/src/auth/keys.controller.ts", "tests/secrets.test.ts",
+  ];
+  for (const f of blocked) {
+    test(`blocks ${f}`, () => expect(lib.isSensitiveRead({ file_path: f })).toBe(true));
+  }
+  for (const f of allowed) {
+    test(`allows ${f}`, () => expect(lib.isSensitiveRead({ file_path: f })).toBe(false));
+  }
+  test("buildEvent suppresses a blocked read's content entirely", () => {
+    const e = lib.buildEvent("tool", {
+      session_id: "sess-12345678", tool_name: "Read",
+      tool_input: { file_path: "certs/server.pem" },
+      tool_response: "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY-----",
+    }, "mustfintech/web", null);
+    expect(e.result).toBe("[REDACTED sensitive file]");
+  });
+});
