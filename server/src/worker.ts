@@ -8,6 +8,8 @@ export const BATCH_MIN = 20;
 export const BATCH_MAX = 40;
 export const ABANDON_MS = 30 * 60 * 1000;
 export const MAX_ATTEMPTS = 3;
+/** Open sessions get their summary refreshed after this many new observations. */
+export const ROLLING_MIN_NEW_OBS = 5;
 
 export interface CompressStats { observations: number; summaries: number; parked: number; }
 
@@ -65,15 +67,29 @@ export async function runCompressionPass(db: Database, provider: LlmProvider, no
     tx();
   }
 
-  const needSummary = db.query(`
-    SELECT s.* FROM sessions s
-    WHERE s.ended_at IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM summaries su WHERE su.session_id = s.id)
-      AND NOT EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.compressed = 0)
-      AND EXISTS (SELECT 1 FROM observations o WHERE o.session_id = s.id)
-  `).all() as SessionRow[];
+  // Summaries: rolling for open sessions, final for ended ones. Teammates rarely
+  // close Claude, so a summary must not wait for a session end:
+  //   - no summary yet + >=1 observation      -> write one now (even mid-session)
+  //   - open session + >= ROLLING_MIN_NEW_OBS observations newer than it -> refresh
+  //   - ended session, events drained, >=1 newer observation -> final refresh
+  // Regeneration is DELETE + INSERT so the FTS triggers fire.
+  const summaryCandidates = db.query(`
+    SELECT s.*,
+      (SELECT MAX(ts) FROM summaries su WHERE su.session_id = s.id) AS summary_ts,
+      (SELECT COUNT(*) FROM observations o WHERE o.session_id = s.id
+         AND o.ts > COALESCE((SELECT MAX(ts) FROM summaries su2 WHERE su2.session_id = s.id), -1)) AS new_obs,
+      (SELECT COUNT(*) FROM events e WHERE e.session_id = s.id AND e.compressed = 0) AS pending
+    FROM sessions s
+    WHERE EXISTS (SELECT 1 FROM observations o WHERE o.session_id = s.id)
+  `).all() as Array<SessionRow & { summary_ts: number | null; new_obs: number; pending: number }>;
 
-  for (const session of needSummary) {
+  for (const session of summaryCandidates) {
+    const ended = session.ended_at !== null;
+    const needs =
+      session.summary_ts === null ? session.new_obs >= 1
+      : ended ? session.pending === 0 && session.new_obs >= 1
+      : session.new_obs >= ROLLING_MIN_NEW_OBS;
+    if (!needs) continue;
     const obs = db.query(`SELECT * FROM observations WHERE session_id = ? ORDER BY id`).all(session.id) as ObservationRow[];
     const lastEvents = (db.query(`SELECT * FROM events WHERE session_id = ? ORDER BY id DESC LIMIT 5`)
       .all(session.id) as EventRow[]).reverse();
@@ -82,10 +98,14 @@ export async function runCompressionPass(db: Database, provider: LlmProvider, no
     try { raw = await provider.complete(system, user); } catch (err) { console.error("[compress] provider", err); raw = null; }
     const parsed = summaryDraftSchema.safeParse(raw === null ? null : extractJson(raw));
     if (!parsed.success) continue; // retried on a later pass
-    db.run(
-      `INSERT INTO summaries(session_id, user_id, project_id, ts, body, open_threads) VALUES (?, ?, ?, ?, ?, ?)`,
-      [session.id, session.user_id, session.project_id, now, redact(parsed.data.body), redact(parsed.data.open_threads)],
-    );
+    const write = db.transaction(() => {
+      db.run(`DELETE FROM summaries WHERE session_id = ?`, [session.id]);
+      db.run(
+        `INSERT INTO summaries(session_id, user_id, project_id, ts, body, open_threads) VALUES (?, ?, ?, ?, ?, ?)`,
+        [session.id, session.user_id, session.project_id, now, redact(parsed.data.body), redact(parsed.data.open_threads)],
+      );
+    });
+    write();
     stats.summaries++;
   }
   return stats;

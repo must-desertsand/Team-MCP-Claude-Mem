@@ -50,6 +50,19 @@ describe("teamStatus", () => {
   });
 });
 
+describe("teamStatus fallback", () => {
+  test("shows latest observations when a user has no summary yet", () => {
+    const db = openDb(":memory:");
+    const y = createUser(db, "yameen");
+    const web = ensureProject(db, "mustfintech/web", MAP);
+    db.run(`INSERT INTO sessions(id,user_id,project_id,started_at,last_event_at) VALUES ('s-y',?,?,?,?)`, [y.id, web.id, NOW - 60_000, NOW - 60_000]);
+    db.run(`INSERT INTO observations(session_id,user_id,project_id,ts,type,title,body) VALUES ('s-y',?,?,?,?,?,?)`,
+      [y.id, web.id, NOW - 30_000, "change", "switched login to session envelope", "b"]);
+    const entry = teamStatus(db, {}, NOW).find(e => e.user === "yameen")!;
+    expect(entry.recent[0]).toContain("change: switched login to session envelope");
+  });
+});
+
 describe("teamSearch / teamTimeline / teamGet", () => {
   test("search returns compact hits across observations and summaries", () => {
     const { db } = seed();

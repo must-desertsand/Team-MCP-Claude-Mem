@@ -367,3 +367,11 @@ in a small documented way from, the design above:
   embedded-tag neutralization and a data-not-instructions notice, mirroring the
   hardening PR'd to l2u-bot (must-goldenrod/l2u-bot#1). REST/JSON output stays
   unwrapped: l2u-bot applies its own boundary at its tool choke point.
+- **Rolling summaries (2026-09-03):** because teammates rarely close Claude
+  Code, a session's summary no longer waits for `SessionEnd`: it is written as
+  soon as the session has observations, refreshed after every 5 new
+  observations while the session stays open, and finalized at end/idle.
+  `team_status` falls back to a user's latest observations when no summary
+  exists yet. Raw events were always captured continuously; this closes the
+  narrative-summary gap for long-lived sessions. Bun `idleTimeout` raised to
+  255 s so the MCP client's keep-alive connection is not cut every 10 s.

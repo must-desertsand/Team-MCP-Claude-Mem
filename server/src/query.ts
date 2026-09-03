@@ -28,13 +28,22 @@ export function teamStatus(db: Database, opts: { workspace?: string; days?: numb
       WHERE su.user_id = ? AND su.ts > ? ${wsFilter}
       ORDER BY su.ts DESC LIMIT 3
     `).all(...recentParams) as Array<{ ts: number; body: string; repo_key: string }>;
+    // A long-open session may have observations but no summary yet: show those
+    // rather than an empty list.
+    const recentObs = recent.length > 0 ? [] : db.query(`
+      SELECT o.ts, o.type, o.title, p.repo_key FROM observations o JOIN projects p ON p.id = o.project_id
+      WHERE o.user_id = ? AND o.ts > ? ${wsFilter}
+      ORDER BY o.ts DESC LIMIT 3
+    `).all(...recentParams) as Array<{ ts: number; type: string; title: string; repo_key: string }>;
     return {
       user: u.name,
       active: active ? {
         repo: active.repo_key, branch: active.branch,
         minutesAgo: Math.floor((now - active.last_event_at) / 60_000),
       } : null,
-      recent: recent.map(r => `[${r.repo_key} · ${relTime(r.ts, now)}] ${r.body.slice(0, 160)}`),
+      recent: recent.length > 0
+        ? recent.map(r => `[${r.repo_key} · ${relTime(r.ts, now)}] ${r.body.slice(0, 160)}`)
+        : recentObs.map(o => `[${o.repo_key} · ${relTime(o.ts, now)}] ${o.type}: ${o.title}`),
     };
   });
 }

@@ -1,0 +1,12 @@
+Looks like that came through empty (just a `-`). No worries.
+
+Quick status so you know where we are: your local Team-Mem is **live and proven** — the `team_status` call returned real data a moment ago.
+
+What would you like next? A couple of options on the table:
+
+1. **Build the shell-env fallback** — let the plugin read the token from `~/.team-mem/config.json` so teammates never hit the "launch from the right terminal" snag. (My recommendation before rollout.)
+2. **Keep testing locally** — work in the repo a few minutes, then I'll show you summaries and briefings appearing.
+3. **Draft the Slack updates** for Hoyoung (deploy + PR) and Dayan (security answer).
+4. Something else.
+
+Just tell me which — or if that `-` was a stray keystroke, ignore this and carry on.

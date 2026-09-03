@@ -3,7 +3,7 @@ import { openDb } from "../src/db";
 import { createUser } from "../src/auth";
 import { ingestEvents } from "../src/ingest";
 import { FakeProvider } from "../src/provider";
-import { runCompressionPass, BATCH_MIN, ABANDON_MS } from "../src/worker";
+import { runCompressionPass, BATCH_MIN, ABANDON_MS, ROLLING_MIN_NEW_OBS } from "../src/worker";
 import { extractJson } from "../src/prompts";
 
 const MAP = { l2u: ["mustfintech/web"] };
@@ -39,13 +39,15 @@ describe("runCompressionPass", () => {
     const { db, userRow } = setup();
     ingestEvents(db, MAP, userRow, mkEvents(BATCH_MIN));
     const fake = new FakeProvider();
-    fake.queue.push(OBS_JSON);
+    // extraction, then the rolling summary the open session now gets right away
+    fake.queue.push(OBS_JSON, SUM_JSON);
     const stats = await runCompressionPass(db, fake);
     expect(stats.observations).toBe(2);
+    expect(stats.summaries).toBe(1);
     expect((db.query(`SELECT COUNT(*) AS n FROM events WHERE compressed = 1`).get() as any).n).toBe(BATCH_MIN);
     const obs = db.query(`SELECT * FROM observations ORDER BY id`).all() as any[];
     expect(obs[0].title).toBe("use JWT for auth");
-    expect(fake.calls.length).toBe(1);
+    expect(fake.calls.length).toBe(2);
     expect(fake.calls[0].user).toContain("edit 3");
   });
   test("session end triggers extraction below threshold plus summary in one pass", async () => {
@@ -111,5 +113,41 @@ describe("runCompressionPass", () => {
     const stats = await runCompressionPass(db, fake);
     expect(stats.summaries).toBe(0);
     expect((db.query(`SELECT COUNT(*) AS n FROM summaries`).get() as any).n).toBe(0);
+  });
+});
+
+describe("rolling summaries for sessions that never close", () => {
+  const OBS5 = JSON.stringify(Array.from({ length: 5 }, (_, i) => ({
+    type: "change", title: `change number ${i}`, body: "did a thing.", files: [], tags: [],
+  })));
+  test("an OPEN session gets a summary as soon as it has observations", async () => {
+    const { db, userRow } = setup();
+    ingestEvents(db, MAP, userRow, mkEvents(BATCH_MIN));
+    const fake = new FakeProvider();
+    fake.queue.push(OBS_JSON, SUM_JSON);
+    const stats = await runCompressionPass(db, fake);
+    expect(stats.summaries).toBe(1);
+    expect((db.query(`SELECT ended_at FROM sessions`).get() as any).ended_at).toBeNull();
+  });
+  test("refreshes only after enough new observations, keeping one row per session", async () => {
+    const { db, userRow } = setup();
+    ingestEvents(db, MAP, userRow, mkEvents(BATCH_MIN));
+    const fake = new FakeProvider();
+    fake.queue.push(OBS_JSON, SUM_JSON);
+    await runCompressionPass(db, fake, 1_000);
+    // 2 new observations (< ROLLING_MIN_NEW_OBS): no refresh, no extra LLM call needed
+    ingestEvents(db, MAP, userRow, mkEvents(BATCH_MIN));
+    fake.queue.push(OBS_JSON);
+    const s2 = await runCompressionPass(db, fake, 2_000);
+    expect(s2.summaries).toBe(0);
+    // 5 new observations: refreshed with the new body, still exactly one row
+    ingestEvents(db, MAP, userRow, mkEvents(BATCH_MIN));
+    fake.queue.push(OBS5, JSON.stringify({ body: "Refreshed summary body.", open_threads: "" }));
+    const s3 = await runCompressionPass(db, fake, 3_000);
+    expect(s3.summaries).toBe(1);
+    const rows = db.query(`SELECT body FROM summaries`).all() as any[];
+    expect(rows.length).toBe(1);
+    expect(rows[0].body).toBe("Refreshed summary body.");
+    expect(ROLLING_MIN_NEW_OBS).toBe(5);
   });
 });

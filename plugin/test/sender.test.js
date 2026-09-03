@@ -29,7 +29,11 @@ function stubServer(status = 200) {
 async function runSender(env, argvEvent) {
   const args = [process.execPath, SENDER];
   if (argvEvent) args.push(JSON.stringify(argvEvent));
-  const proc = Bun.spawn(args, { env: { ...process.env, ...env }, stdout: "ignore", stderr: "ignore" });
+  // A developer's shell may export TEAM_MEM_* (once the plugin is installed for
+  // real); strip them so each test controls exactly what the sender sees.
+  const inherited = { ...process.env };
+  for (const k of Object.keys(inherited)) if (k.startsWith("TEAM_MEM_")) delete inherited[k];
+  const proc = Bun.spawn(args, { env: { ...inherited, ...env }, stdout: "ignore", stderr: "ignore" });
   await proc.exited;
   return proc;
 }
