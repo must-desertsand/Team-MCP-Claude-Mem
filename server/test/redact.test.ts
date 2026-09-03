@@ -7,7 +7,7 @@ describe("server-side redact (defense in depth)", () => {
     ["aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "aws_secret_access_key = [REDACTED]"],
     ["AKIAIOSFODNN7EXAMPLE", "[REDACTED]"],
     ["Bearer abcdefgh1234567890", "[REDACTED]"],
-    ["bearer abcd", "[REDACTED]"],
+    ["bearer abc12", "[REDACTED]"],
     ["postgres://l2u:S3cretPw@db.seoul:5432/app", "postgres://l2u:[REDACTED]@db.seoul:5432/app"],
   ];
   for (const [input, want] of cases) {
@@ -68,5 +68,20 @@ describe("precision (from l2u-bot PR #1 review)", () => {
     expect(redact("xapp-1-A0123456789-abcdefghij")).toBe("[REDACTED]");
     expect(redact("xoxe-1234567890-abcdefghijkl")).toBe("[REDACTED]");
     expect(redact("x".repeat(45))).toBe("[REDACTED]");
+  });
+});
+
+describe("precision round 2 (l2u-bot PR #1 review)", () => {
+  test("prose, names, identifiers, scheme words, uppercase hashes survive", () => {
+    for (const s of [
+      "Send the bearer token in the Authorization header",
+      'API_TOKEN_HEADER = "x-api-token"',
+      "secretName: my-app-secrets",
+      "authorization: 'Bearer '",
+      "token = MY_APP_TOKEN",
+      "commit 3F28C22A9B1D4E5F6A7B8C9D0E1F2A3B4C5D6E7F",
+    ]) expect(redact(s)).toBe(s);
+    expect(redact("Bearer abc12")).toBe("[REDACTED]");
+    expect(redact("password: MyPassword")).toBe("password: [REDACTED]");
   });
 });

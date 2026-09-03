@@ -108,3 +108,17 @@ describe("precision (from l2u-bot PR #1 review)", () => {
     expect(redact("xoxe-1234567890-abcdefghijkl")).toBe("[REDACTED]");
   });
 });
+
+describe("precision round 2 (l2u-bot PR #1 review)", () => {
+  const lib = require("../scripts/lib.js");
+  test("prose, names, identifiers survive; templates readable; source 'credentials.ts' readable", () => {
+    for (const s of ["Send the bearer token in the Authorization header", 'API_TOKEN_HEADER = "x-api-token"', "secretName: my-app-secrets"]) {
+      expect(lib.redact(s)).toBe(s);
+    }
+    expect(lib.redact("Bearer abc12")).toBe("[REDACTED]");
+    expect(lib.isSensitiveRead({ file_path: ".env.example" })).toBe(false);
+    expect(lib.isSensitiveRead({ file_path: "src/auth/credentials.ts" })).toBe(false);
+    expect(lib.isSensitiveRead({ file_path: ".aws/credentials" })).toBe(true);
+    expect(lib.isSensitiveRead({ file_path: "backend/.env" })).toBe(true);
+  });
+});
