@@ -41,12 +41,14 @@ describe("buildEvent", () => {
     expect(lib.buildEvent("prompt", { prompt: "hi" }, "mustfintech/web", null)).toBeNull();
   });
   test("final cap is authoritative even when redaction grows text past the pre-cap length", () => {
-    // "token=1" (7 chars) -> redact() -> "token=[REDACTED]" (16 chars): +9 chars growth.
+    // "token=a1b2c3" (12 chars) -> redact() -> "token=[REDACTED]" (16 chars): +4 chars growth.
+    // (The value must look like a real secret - digits, >=6 chars - or the precision rule
+    // from the PR #1 review leaves it alone, which is correct.)
     // Base prompt sits just under the 4000 cap, so the pre-fix `redact(cap(x,4000))` ordering
     // let that growth push the final text past 4000; the fix caps again, after redact, for real.
     // The marker sits near the start (not the tail) so the truncation point -- which lands near
     // the end of the padding once the final cap fires -- can never cut through the token itself.
-    const marker = "token=1 ";
+    const marker = "token=a1b2c3 ";
     const filler = "lorem ipsum dolor sit amet ".repeat(300).slice(0, 3999 - marker.length);
     const prompt = marker + filler;
     expect(prompt.length).toBe(3999); // sanity-check the fixture itself: under the 4000 pre-cap

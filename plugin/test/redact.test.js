@@ -91,3 +91,20 @@ describe("sensitive-file blocklist breadth", () => {
     expect(e.result).toBe("[REDACTED sensitive file]");
   });
 });
+
+describe("precision (from l2u-bot PR #1 review)", () => {
+  const { redact } = require("../scripts/lib.js");
+  test("keeps git hashes, code, and prose intact", () => {
+    for (const s of [
+      "commit 3f28c22a9b1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f fixes the bug",
+      "readonly token: string;",
+      "const apiKey = process.env.API_KEY;",
+      "const secret = computeSecret(a, b);",
+    ]) expect(redact(s)).toBe(s);
+  });
+  test("still catches real literals and newer Slack prefixes", () => {
+    expect(redact('const apiKey = "sk_live_abc123XYZ";')).toBe('const apiKey = "[REDACTED]";');
+    expect(redact("xapp-1-A0123456789-abcdefghij")).toBe("[REDACTED]");
+    expect(redact("xoxe-1234567890-abcdefghijkl")).toBe("[REDACTED]");
+  });
+});

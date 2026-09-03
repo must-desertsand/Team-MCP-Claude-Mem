@@ -75,18 +75,33 @@ function isAllowed(repoKey, settings) {
   return (settings.include || []).some(p => matchPattern(p, key));
 }
 
+// A key=value value counts as a secret literal only when it looks like one
+// (secret-safe charset, >=6 chars, digit / symbol / mixed case). Code and prose
+// mention these keys constantly ("readonly token: string;") and must survive.
+const SECRET_VALUE_CHARSET = /^[A-Za-z0-9_\-./+=~!@#$%^&*]{6,}$/;
+function looksLikeSecretValue(value) {
+  if (!SECRET_VALUE_CHARSET.test(value)) return false;
+  if (/^process\.env\./i.test(value)) return false;
+  return /\d/.test(value) || /[^A-Za-z0-9]/.test(value) || (/[a-z]/.test(value) && /[A-Z]/.test(value));
+}
+// Git SHA-1 / SHA-256 hashes are not secrets: lowercase hex, exactly 40 or 64 chars.
+function isContentHash(run) {
+  return /^[0-9a-f]{40}$/.test(run) || /^[0-9a-f]{64}$/.test(run);
+}
+
 function redact(text) {
   if (!text) return text;
   let t = String(text);
   t = t.replace(/-----BEGIN [A-Z ]*KEY-----[\s\S]*?-----END [A-Z ]*KEY-----/g, "[REDACTED]");
   t = t.replace(/\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{16,}\b/g, "[REDACTED]");
-  t = t.replace(/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, "[REDACTED]");
+  t = t.replace(/\b(?:xox[abeprs]|xapp)-[A-Za-z0-9-]{10,}\b/g, "[REDACTED]");
   t = t.replace(/(:\/\/[^\/\s:@"']+:)[^\/\s@"']+(@)/g, "$1[REDACTED]$2");
   t = t.replace(/\bbearer\s+[A-Za-z0-9._~+/-]{4,}=*/gi, "[REDACTED]");
-  t = t.replace(/([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|authorization)[A-Za-z0-9_.-]*["']?\s*[:=]\s*["']?)([^\s"']+)/gi, "$1[REDACTED]");
+  t = t.replace(/([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|authorization)[A-Za-z0-9_.-]*["']?\s*[:=]\s*["']?)([^\s"']+)/gi,
+    (match, key, value) => (looksLikeSecretValue(value) ? key + "[REDACTED]" : match));
   t = t.replace(/AKIA[0-9A-Z]{16}/g, "[REDACTED]");
   t = t.replace(/eyJ[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, "[REDACTED]");
-  t = t.replace(/[A-Za-z0-9+]{40,}={0,2}/g, "[REDACTED]");
+  t = t.replace(/[A-Za-z0-9+]{40,}={0,2}/g, (run) => (isContentHash(run) ? run : "[REDACTED]"));
   return t;
 }
 
