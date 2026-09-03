@@ -14,5 +14,7 @@ const app = buildApp(db, cfg);
 const provider = new OpenAiCompatProvider(cfg.llmBaseUrl, cfg.llmApiKey, cfg.llmModel);
 startCompressionLoop(db, provider, cfg.pollMs);
 startRetentionLoop(db);
-Bun.serve({ port: cfg.port, fetch: app.fetch });
+// idleTimeout: Bun defaults to 10 s, which cuts the MCP client's kept-alive connection
+// between calls and makes Claude Code report "failed to reconnect". 255 s is Bun's max.
+Bun.serve({ port: cfg.port, fetch: app.fetch, idleTimeout: 255 });
 console.log(`team-mem server listening on :${cfg.port} (db: ${cfg.dbPath}, llm: ${cfg.llmBaseUrl} ${cfg.llmModel})`);
